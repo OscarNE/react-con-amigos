@@ -43,8 +43,8 @@ const writeCsvFile = async (entries: Entry[]): Promise<void> => {
 app.post('/addword', async (req: Request, res: Response) => {
     const { phazori, significado, comun } = req.body;
 
-    if (!phazori || !significado) {
-        return res.status(400).json({ message: 'phazori and significado are required' });
+    if (!phazori || !comun) {
+        return res.status(400).json({ message: 'phazori and comun are required' });
     }
 
     try {
@@ -69,8 +69,8 @@ app.post('/addword', async (req: Request, res: Response) => {
     }
 });
 
-// GET /pathori/:value endpoint
-app.get('/pathori/:value', async (req: Request, res: Response) => {
+// GET /phazori/:value endpoint
+app.get('/phazori/:value', async (req: Request, res: Response) => {
     const { value } = req.params;
 
     try {
