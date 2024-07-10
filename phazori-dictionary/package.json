@@ -1,0 +1,11 @@
+{
+  "name": "phazori-dictionary",
+  "version": "1.0.0",
+  "description": "Diccionario y otras herramientas para el idioma Phazori :3",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Rextisian",
+  "license": "ISC"
+}
