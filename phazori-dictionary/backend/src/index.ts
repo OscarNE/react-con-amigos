@@ -1,66 +1,36 @@
 import express, { Request, Response } from 'express';
 import bodyParser from 'body-parser';
-import fs from 'fs';
-import path from 'path';
-import { parse } from '@fast-csv/parse';
-import { format, writeToStream } from '@fast-csv/format';
+import {Entry} from './csvManager.ts';
+import {csvManager} from './csvManager.ts';
 
 const app = express();
 const port = 3000;
-const csvFilePath = path.resolve(__dirname, 'data.csv');
+const csv = new csvManager('data.csv');
 
 app.use(bodyParser.json());
 
-interface Entry {
-    phazori: string;
-    significado: string;
-    comun?: string;
-}
-
-// Helper function to read the CSV file and return its content
-const readCsvFile = async (): Promise<Entry[]> => {
-    return new Promise((resolve, reject) => {
-        const results: Entry[] = [];
-        fs.createReadStream(csvFilePath)
-            .pipe(parse({ headers: true }))
-            .on('data', (data: Entry) => results.push(data))
-            .on('end', () => resolve(results))
-            .on('error', (error) => reject(error));
-    });
-};
-
-// Helper function to write data to the CSV file
-const writeCsvFile = async (entries: Entry[]): Promise<void> => {
-    return new Promise((resolve, reject) => {
-        const ws = fs.createWriteStream(csvFilePath);
-        writeToStream(ws, entries, { headers: true })
-            .on('finish', resolve)
-            .on('error', reject);
-    });
-};
-
 // POST /addword endpoint
 app.post('/addword', async (req: Request, res: Response) => {
-    const { phazori, significado, comun } = req.body;
+    const { phazori, significado, comun, verbo } = req.body;
 
     if (!phazori || !comun) {
         return res.status(400).json({ message: 'phazori and comun are required' });
     }
 
     try {
-        let entries = await readCsvFile();
+        let entries = await csv.read();
 
         if (entries.some(entry => entry.phazori === phazori)) {
             return res.status(409).json({ message: 'Entry already exists' });
         }
 
-        const newEntry: Entry = { phazori, significado, comun };
+        const newEntry: Entry = { phazori, significado, comun, verbo };
         entries.push(newEntry);
 
         // Sort entries alphabetically by phazori
         entries = entries.sort((a, b) => a.phazori.localeCompare(b.phazori));
 
-        await writeCsvFile(entries);
+        await csv.write(entries);
 
         res.status(201).json({ message: 'Entry added successfully' });
     } catch (error) {
@@ -74,7 +44,7 @@ app.get('/phazori/:value', async (req: Request, res: Response) => {
     const { value } = req.params;
 
     try {
-        const entries = await readCsvFile();
+        const entries = await csv.read();
         const entry = entries.find(entry => entry.phazori === value);
 
         if (!entry) {
@@ -93,7 +63,7 @@ app.get('/comun/:value', async (req: Request, res: Response) => {
     const { value } = req.params;
 
     try {
-        const entries = await readCsvFile();
+        const entries = await csv.read();
         const entry = entries.find(entry => entry.comun === value);
 
         if (!entry) {
