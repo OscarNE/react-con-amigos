@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import bodyParser from 'body-parser';
-import {Entry} from './csvManager.ts';
-import {csvManager} from './csvManager.ts';
+import {Entry} from './csvManager';
+import {csvManager} from './csvManager';
 
 const app = express();
 const port = 3000;
@@ -9,8 +9,8 @@ const csv = new csvManager('data.csv');
 
 app.use(bodyParser.json());
 
-// POST /addword endpoint
-app.post('/addword', async (req: Request, res: Response) => {
+// POST /register endpoint
+app.post('/register', async (req: Request, res: Response) => {
     const { phazori, significado, comun, verbo } = req.body;
 
     if (!phazori || !comun) {
@@ -70,7 +70,7 @@ app.get('/comun/:value', async (req: Request, res: Response) => {
             return res.status(404).json({ message: 'Entry not found' });
         }
 
-        res.json({ phazori: entry.phazori });
+        res.json({ phazori: entry });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Internal server error' });
