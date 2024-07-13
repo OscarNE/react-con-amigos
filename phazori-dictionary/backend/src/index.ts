@@ -13,15 +13,12 @@ app.use(bodyParser.json());
 
 
 app.post('/api/name', async (req, res) => {
-    const { raiz_phazori, comun, significado, regular, masculino, femenino } = req.body;
+    const { raiz_phazori, comun, notas } = req.body;
     try {
         const name = new Name({ 
             raiz_phazori, 
             comun, 
-            significado, 
-            regular, 
-            masculino,
-            femenino
+            notas,
         });
         await name.save();
         res.status(201).json(name);
