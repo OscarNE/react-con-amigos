@@ -3,10 +3,16 @@
   border-radius: 8px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   padding: 20px;
-  width: 100%;
-  max-width: 600px;
-  margin: 0 auto;
+  margin: 0;
   text-align: center;
+}
+
+@media (min-width: 768px) {
+  .search-location {
+    width: 100%;
+    max-width: 600px;
+    margin: 0 auto;
+  }
 }
 
 .search-location h2 {
