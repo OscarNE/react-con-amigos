@@ -130,4 +130,4 @@ dist
 .pnp.*
 
 # yarr folder
-/yarr-novels/yarr-novels-backend/src/dowloads
+/yarr-novels/yarr-novels-backend/src/downloads
