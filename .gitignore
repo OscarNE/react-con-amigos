@@ -131,3 +131,4 @@ dist
 
 # yarr folder
 /yarr-novels/yarr-novels-backend/src/downloads
+/yarr-novels/yarr-novels-backend/debug.txt

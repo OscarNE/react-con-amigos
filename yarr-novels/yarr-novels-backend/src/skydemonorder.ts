@@ -48,48 +48,34 @@ async function scrapeSite(url: string) {
   // Read the list of already processed files
   const processedFiles = fs.readdirSync(folderPath).map(file => path.basename(file, '.html'));
 
-  const links: { href: string; text: string }[] = [];
+  const links: { href: string; text: string; episode: string }[] = [];
   $('div[x-show="expanded"] a').each((index, element) => {
     const href = $(element).attr('href');
     const text = $(element).text().trim();
-    if (href) {
-      links.push({ href, text });
+
+    // Find the closest div containing the chapter number
+    const parentDiv = $(element).closest('div.py-4.text-base.space-y-2');
+    const episode = parentDiv.find('span[x-text="chapter.episode"]').text().trim();
+
+    if (href && episode) {
+      links.push({ href, text, episode });
     }
   });
 
   console.log(`Title: ${title}`);
   console.log('Links and their text:');
 
+  // Reverse the array to start fetching from the begining
+  links.reverse();
+
   for (const [index, link] of links.entries()) {
     console.log(`Processing link ${index + 1} of ${links.length}: ${link.text}, URL: ${link.href}`);
 
     // Construct the full URL for the chapter
     const fullUrl = new URL(link.href, url).toString();
-
-    // Visit each link and extract chapter content with a 10-second timeout
-    await page.goto(fullUrl, { waitUntil: 'networkidle2', timeout: 10000 });
-
-    // Handle age verification prompt if it appears on chapter pages
-    try {
-      await page.waitForSelector('.px-6.py-8 button', { timeout: 3000 });
-      console.log(`Age verification prompt found on link ${index + 1}. Clicking the "Yes" button...`);
-      await page.click('.px-6.py-8 button:first-of-type'); // Click the first button ("Yes")
-      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 });
-    } catch (err) {
-      console.log(`No age verification prompt found on link ${index + 1}.`);
-    }
-
-    const chapterContent = await page.content();
-    const $$ = cheerio.load(chapterContent);
-
-    // Extract the episode number from the chapter content
-    const episodeNumber = $$('h1.font-bold')
-      .text()
-      .trim()
-      .match(/\d+/)?.[0] || '0000';
-
+    
     // Zero-pad the episode number to four digits
-    const paddedEpisodeNumber = episodeNumber.padStart(4, '0');
+    const paddedEpisodeNumber = link.episode.padStart(4, '0');
 
     // Create the expected file name
     const sanitizedText = link.text.replace(/[^a-z0-9]/gi, '_').toLowerCase();
@@ -101,6 +87,22 @@ async function scrapeSite(url: string) {
       continue; // Skip to the next iteration
     }
 
+    // Visit each link and extract chapter content with a 10-second timeout
+    await page.goto(fullUrl, { waitUntil: 'networkidle2', timeout: 10000 });
+
+    // Handle age verification prompt if it appears on chapter pages
+    try {
+      await page.waitForSelector('.px-6.py-8 button', { timeout: 3000 });
+      console.log(`Age verification prompt found on link ${index + 1}. Clicking the "Yes" button...`);
+      await page.click('.px-6.py-8 button:first-of-type'); // Click the first button ("Yes")
+      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 });
+    } catch (err) {
+      //console.log(`No age verification prompt found on link ${index + 1}.`);
+    }
+
+    const chapterContent = await page.content();
+    const $$ = cheerio.load(chapterContent);
+
     // Check if the page contains the "Unlock this episode" text and skip if found
     const unlockText = $$('.mb-4.text-sm').filter((_, element) => {
       return $$(element).text().trim().includes('Unlock this episode');
@@ -108,7 +110,8 @@ async function scrapeSite(url: string) {
 
     if (unlockText.length > 0) {
       console.log(`Skipping locked content for link ${index + 1} of ${links.length}: ${link.text}, URL: ${fullUrl}`);
-      continue; // Skip to the next iteration
+      console.log("Skipping the rest of chapters");
+      return 0; // Skip to the next iteration
     }
 
     let chapterBody = $$('#chapter-body').html()?.trim();
@@ -116,6 +119,8 @@ async function scrapeSite(url: string) {
     // Check if content was found
     if (!chapterBody) {
       console.error(`No content found for link ${index + 1} of ${links.length}: ${link.text}, URL: ${fullUrl}`);
+      fs.writeFileSync("debug.txt", chapterContent);
+      console.log("Full body at debug.txt")
       await browser.close();
       process.exit(1); // Exit the program with a non-zero status to indicate an error
     }
@@ -134,6 +139,7 @@ async function scrapeSite(url: string) {
     fs.writeFileSync(filePath, chapterBody);
 
     console.log(`Content saved to ${filePath}`);
+    console.log("");
   }
 
   await browser.close();
