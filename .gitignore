@@ -128,3 +128,6 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# yarr folder
+/yarr-novels/yarr-novels-backend/src/dowloads
