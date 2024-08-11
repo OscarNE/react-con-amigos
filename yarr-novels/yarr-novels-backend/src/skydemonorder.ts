@@ -23,6 +23,16 @@ async function scrapeSite(url: string) {
     console.log('No age verification prompt found.');
   }
 
+  // Handle consent dialog if it appears
+  try {
+    await page.waitForSelector('.fc-dialog-container .fc-footer-buttons-container .fc-primary-button', { timeout: 3000 });
+    console.log('Consent dialog found. Clicking the "Consent" button...');
+    await page.click('.fc-dialog-container .fc-footer-buttons-container .fc-primary-button'); // Click the "Consent" button
+    await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 });
+  } catch (err) {
+    console.log('No consent dialog found.');
+  }
+
   const content = await page.content();
   const $ = cheerio.load(content);
 
@@ -63,7 +73,6 @@ async function scrapeSite(url: string) {
   });
 
   console.log(`Title: ${title}`);
-  console.log('Links and their text:');
 
   // Reverse the array to start fetching from the begining
   links.reverse();
