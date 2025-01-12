@@ -11,7 +11,14 @@ async function scrapeSite(url: string) {
   const page = await browser.newPage();
 
   // Visit the main page
-  await page.goto(url, { waitUntil: 'networkidle2', timeout: 10000 });
+  try {
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 10000 });
+    console.log('Page loaded successfully.');
+  } catch (err) {
+    console.error(`Failed to load page: ${url}`, err);
+    await browser.close();
+    return;
+  }
 
   // Handle age verification prompt if it appears
   try {
@@ -38,15 +45,26 @@ async function scrapeSite(url: string) {
 
   // Extract the title, ensuring no unwanted content is included
   let title = $('h1.font-bold').first().text().trim();
+  console.log(`Extracted title before cleaning: '${title}'`);
+
+  if (!title) {
+    console.error('Title extraction failed. Check the selector for the title.');
+    fs.writeFileSync('debug_page_content.html', content);
+    console.log('Saved page content to debug_page_content.html');
+    await browser.close();
+    return;
+  }
 
   // Clean the title to ensure it's safe for use in file and directory names
   title = title.replace(/[^\w\s-]/g, '').trim(); // Remove special characters except spaces and hyphens
   title = title.replace(/\s+/g, ' '); // Replace multiple spaces with a single space
   title = title.replace(/[-\s]+/g, ' '); // Replace hyphens and spaces with a single space
+  console.log(`Cleaned title: '${title}'`);
 
-  const folderPath = path.join(__dirname, 'downloads', 'skydemonorder', title);
+  const folderPath = path.join(__dirname, '..', '..', 'downloads', 'skydemonorder', title);
   if (!fs.existsSync(folderPath)) {
     fs.mkdirSync(folderPath, { recursive: true });
+    console.log(`Created folder: ${folderPath}`);
   }
 
 
