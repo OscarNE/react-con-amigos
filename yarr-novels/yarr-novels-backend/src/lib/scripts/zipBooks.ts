@@ -5,6 +5,13 @@ import { WriteStream } from 'fs';
 import cliProgress from 'cli-progress';
 
 /**
+ * Sanitizes the book title to create valid folder paths.
+ */
+function sanitizeTitle(title: string): string {
+  return title.replace(/[^\w\s-]/g, '').replace(/\s+/g, '_').trim();
+}
+
+/**
  * Zips all HTML files in the book folder to a new path with a progress bar.
  * @param bookFolderPath - Path to the book's folder.
  * @param bookName - Name of the book.
@@ -18,7 +25,8 @@ export async function zipBookFolder(bookFolderPath: string, bookName: string): P
     return;
   }
 
-  const updatesFolderPath: string = path.join(__dirname, '..', '..', 'books', bookName);
+  const sanitizedTitle = sanitizeTitle(bookName || '');
+  const updatesFolderPath: string = path.join(__dirname, '..', '..', 'books', sanitizedTitle);
   if (!fs.existsSync(updatesFolderPath)) {
     fs.mkdirSync(updatesFolderPath, { recursive: true });
   }

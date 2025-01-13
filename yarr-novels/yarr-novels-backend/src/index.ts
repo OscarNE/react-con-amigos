@@ -58,15 +58,17 @@ async function scrapeBooks(): Promise<void> {
     return;
   }
 
+  updateBooksConfig();
+
   for (const book of books) {
     if (book.translationUrl) {
-      await runScraper(book.translationUrl);
+      //await runScraper(book.translationUrl);
     } else {
       console.warn(`⚠️ No translation URL for book: ${book.title}`);
     }
   }
   //After downloading the books, update the books_config.json file
-  // updateBooksConfig();
+  //updateBooksConfig();
 }
 
 // Start scraping process

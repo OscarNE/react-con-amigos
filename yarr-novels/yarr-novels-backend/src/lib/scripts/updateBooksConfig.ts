@@ -51,7 +51,7 @@ async function downloadImage(url: string, filePath: string): Promise<void> {
  * Scrapes NovelUpdates for book details.
  */
 async function scrapeNovelUpdates(url: string): Promise<Partial<Book>> {
-    const browser: Browser = await puppeteer.launch({ headless: true });
+    const browser: Browser = await puppeteer.launch({ headless: false });
     const page: Page = await browser.newPage();
     const scrapedData: Partial<Book> = {};
   
@@ -78,7 +78,7 @@ async function scrapeNovelUpdates(url: string): Promise<Partial<Book>> {
       const coverSelector = 'div.seriesimg img';
       const coverUrl = await page.$eval(coverSelector, img => img.getAttribute('src')).catch(() => '');
       const sanitizedTitle = sanitizeTitle(scrapedData.title || '');
-      const coverFolderPath = path.join(__dirname, '..', `books_data/${sanitizedTitle}`, 'cover');
+      const coverFolderPath = path.join(__dirname, '..', '..', `books/${sanitizedTitle}`, 'cover');
       if (!fs.existsSync(coverFolderPath)) {
         fs.mkdirSync(coverFolderPath, { recursive: true });
       }
