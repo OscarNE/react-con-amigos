@@ -54,9 +54,36 @@ async function extractLinks($: CheerioAPI): Promise<ChapterLink[]> {
 
 function cleanHTMLContent(htmlContent: string): string {
   const $ = cheerio.load(htmlContent);
-  const textContent = $.text().split('\n').map(line => line.trim()).filter(line => line.length > 0);
-  return textContent.map(line => `<p>${line}</p>`).join('\n');
+
+  // Target the main content area without being too aggressive
+  const contentDiv = $('.reading-content, .text-left');
+
+  // Remove only non-text disruptive elements (scripts, ads, etc.)
+  contentDiv.find('script, button, svg, iframe, noscript, style').remove();
+
+  /**
+   * Extracts <p> tags related to the book chapter content.
+   * Filters out <p> tags that contain ads, styles, or other unwanted content.
+   */
+  const chapterParagraphs = contentDiv.find('p')
+    .filter((_, elem) => {
+      const text = $(elem).text().trim();
+      // Filter out empty <p> and known unwanted content
+      return text.length > 0 && !/(PUBFUTURE|記事を読む|truvid|style|video|advertisement)/i.test(text);
+    })
+    .map((_, elem) => $(elem).text().trim())
+    .get()
+    .join('\n');
+
+  // Wrap each paragraph in <p> tags again
+  return chapterParagraphs
+    .split('\n')
+    .filter(line => line.length > 0) // Remove empty lines
+    .map(line => `<p>${line}</p>`)
+    .join('\n');
 }
+
+
 
 async function processChapter(
   page: Page,
@@ -79,7 +106,7 @@ async function processChapter(
   }
 
   console.log(`Processing chapter ${index + 1}/${total}: ${link.text}`);
-  await page.goto(fullUrl, { waitUntil: 'networkidle2', timeout: 10000 });
+  await page.goto(fullUrl, { waitUntil: 'networkidle2', timeout: 20000 });
   await handlePrompt(page, '.px-6.py-8 button:first-of-type', 'Age verification prompt');
 
   const content: string = await page.content();
@@ -99,6 +126,9 @@ async function processChapter(
   chapterBody = cleanHTMLContent(chapterBody);
   fs.writeFileSync(filePath, chapterBody);
   console.log(`Saved: ${filePath}`);
+
+  //timeout after downloading a chapter
+  await sleep(Math.floor(Math.random() * 2000) + 4000);
 }
 
 async function scrapeSite(url: string): Promise<void> {
@@ -117,7 +147,6 @@ async function scrapeSite(url: string): Promise<void> {
 
   const links: ChapterLink[] = await extractLinks($);
   for (const [index, link] of links.entries()) {
-    await sleep(Math.floor(Math.random() * 2000) + 4000);
     await processChapter(page, link, folderPath, processedFiles, index, links.length);
   }
 
