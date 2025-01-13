@@ -4,6 +4,7 @@ import puppeteer from 'puppeteer-extra';
 import { Browser, Page } from 'puppeteer';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import * as cheerio from 'cheerio';
+import { zipBookFolder } from '../scripts/zipBooks';
 
 type CheerioAPI = cheerio.CheerioAPI;
 puppeteer.use(StealthPlugin());
@@ -71,15 +72,24 @@ function cleanHTMLContent(htmlContent: string): string {
     .join('\n');
 }
 
-async function processChapter(page: Page, link: ChapterLink, folderPath: string, processedFiles: string[], index: number, total: number): Promise<void> {
+async function processChapter(
+  page: Page, 
+  link: ChapterLink, 
+  folderPath: string, 
+  processedFiles: string[], 
+  index: number, 
+  total: number,
+  counters: { skipped: number; downloaded: number; timeout: number }
+): Promise<void> {
   const fullUrl: string = new URL(link.href).toString();
   const paddedEpisode: string = link.episode.padStart(4, '0');
   const sanitizedText: string = link.text.replace(/[^a-z0-9]/gi, '_').toLowerCase();
   const fileName: string = `Chapter_${paddedEpisode}_${sanitizedText}.html`;
   const filePath: string = path.join(folderPath, fileName);
 
-  if (processedFiles.includes(path.basename(fileName, '.html'))){
+  if (processedFiles.includes(path.basename(fileName, '.html'))) {
     console.log(`⏭️ Skipping already processed: ${fileName}`);
+    counters.skipped += 1;
     return;
   }
 
@@ -88,6 +98,7 @@ async function processChapter(page: Page, link: ChapterLink, folderPath: string,
     await page.goto(fullUrl, { waitUntil: 'networkidle2', timeout: 20000 });
   } catch (error) {
     console.error(`⏳ Timeout loading page for ${link.text}. Skipping...`);
+    counters.timeout += 1;
     return;
   }
 
@@ -96,6 +107,7 @@ async function processChapter(page: Page, link: ChapterLink, folderPath: string,
   const $$ = cheerio.load(content);
   if ($$('.mb-4.text-sm').text().includes('Unlock this episode')) {
     console.warn(`🔒 Locked content detected. Skipping ${link.text}`);
+    counters.skipped += 1;
     return;
   }
 
@@ -109,42 +121,71 @@ async function processChapter(page: Page, link: ChapterLink, folderPath: string,
   chapterBody = cleanHTMLContent(chapterBody);
   fs.writeFileSync(filePath, chapterBody);
   console.log(`✅ Saved: ${fileName}`);
+  counters.downloaded += 1;
+
   await sleep(Math.floor(Math.random() * 2000) + 4000);
 }
 
-async function scrapeSite(url: string): Promise<void> {
+async function scrapeSite(url: string, counters: { skipped: number; downloaded: number; timeout: number }): Promise<void> {
   const browser: Browser = await puppeteer.launch({ headless: true });
   const page: Page = await browser.newPage();
+
   try {
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 10000 });
   } catch (error) {
     console.error(`⏳ Timeout loading the site: ${url}. Skipping...`);
+    counters.timeout += 1;
     await browser.close();
     return;
   }
 
   await handlePrompt(page, '.px-6.py-8 button:first-of-type', 'Age verification prompt');
   await handlePrompt(page, '.fc-dialog-container .fc-footer-buttons-container .fc-primary-button', 'Consent dialog');
+
   const $: CheerioAPI = cheerio.load(await page.content());
-  let title: string = sanitizeTitle($('div.post-title > h1').first().text());
+  const title: string = sanitizeTitle($('div.post-title > h1').first().text());
   const folderPath: string = path.join(__dirname, '..', '..', 'downloads', 'fenrirtranslations', title);
+
   createFolder(folderPath);
+
   const processedFiles: string[] = fs.readdirSync(folderPath).map(f => path.basename(f, '.html'));
   const links: ChapterLink[] = await extractLinks($);
+
   for (const [index, link] of links.entries()) {
-    await processChapter(page, link, folderPath, processedFiles, index, links.length);
+    await processChapter(page, link, folderPath, processedFiles, index, links.length, counters);
   }
+
   await browser.close();
-  console.log(`✅ Finished scraping: ${title}`);
+
+  console.log('--------------------------------------');
+  console.log(`📖 Summary for ${url}:`);
+  console.log(`⏭️ Skipped: ${counters.skipped}`);
+  console.log(`✅ Downloaded: ${counters.downloaded}`);
+  console.log(`⏳ Timeouts: ${counters.timeout}`);
+  console.log('--------------------------------------');
+
+  // 👉 Zip the book if no timeouts occurred
+  if (counters.timeout === 0) {
+    console.log(`📦 No timeouts detected. Zipping the book: ${title}`);
+    await zipBookFolder(folderPath, title);
+  } else {
+    console.warn(`⚠️ Skipping zipping for ${title} due to ${counters.timeout} timeout(s).`);
+  }
+  console.log('--------------------------------------');
 }
+
+
 
 export async function scrapeFenrirTranslations(urls: string[]): Promise<void> {
   for (const url of urls) {
+    const bookCounters = { skipped: 0, downloaded: 0, timeout: 0 };
     try {
       console.log(`🚀 Starting scrape for: ${url}`);
-      await scrapeSite(url);
+      await scrapeSite(url, bookCounters);
+
     } catch (error) {
       console.error(`❌ Error scraping ${url}:`, error);
     }
   }
 }
+

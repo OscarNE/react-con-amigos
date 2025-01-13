@@ -16,7 +16,6 @@ export const props: Config = {
         'https://skydemonorder.com/projects/regression-soldiers-female-conquest-diary',
         'https://skydemonorder.com/projects/the-heroine-of-the-1st-playthrough-remembers-my-training',
         'https://skydemonorder.com/projects/the-legacy-of-the-dragon',
-        'https://skydemonorder.com/projects/breathing-life-into-real-dolls'
 
       ],
       fenrirtranslationsUrls: [
