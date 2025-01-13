@@ -20,6 +20,18 @@ export const props: Config = {
 
       ],
       fenrirtranslationsUrls: [
-        'https://fenrirtranslations.com/series/taming-the-villainesses/'
+        'https://fenrirtranslations.com/series/taming-the-villainesses/',
+        'https://fenrirtranslations.com/series/i-became-a-swordsmanship-instructor-in-a-romance-novel/',
+        'https://fenrirtranslations.com/series/i-became-a-thief-who-steals-overpowered-skills/',
+        'https://fenrirtranslations.com/series/battle-race-in-the-fantasy-world/',
+        'https://fenrirtranslations.com/series/i-dont-want-to-be-a-villainess/',
+        'https://fenrirtranslations.com/series/the-dungeon-monsters-keep-offering-sacrifices/',
+        'https://fenrirtranslations.com/series/the-man-with-hypnotic-powers-doesnt-hold-back-the-second-time-around/',
+        'https://fenrirtranslations.com/series/the-protagonists-party-is-too-diligent/',
+        'https://fenrirtranslations.com/series/the-villainess-whom-i-had-served-for-13-years-has-fallen/',
+        'https://fenrirtranslations.com/series/a-wild-man-has-entered-the-academy/',
+        'https://fenrirtranslations.com/series/the-doctor-cured-the-villainess-and-ran-away/',
+        'https://fenrirtranslations.com/series/the-grill-wielding-saintess-of-the-dead/'
+
       ]
 }
