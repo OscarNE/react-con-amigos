@@ -7,7 +7,12 @@ import cheerio from 'cheerio';
 puppeteer.use(StealthPlugin());
 
 async function scrapeSite(url: string) {
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await puppeteer.connect({
+    // Run on Poweshell: 
+    // & "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\chrome-profile"
+    browserURL: 'http://localhost:9222',
+    defaultViewport: null,
+  });
   const page = await browser.newPage();
 
   // Visit the main page
