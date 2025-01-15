@@ -86,7 +86,7 @@ async function scrapeNovelUpdates(url: string): Promise<Partial<Book>> {
         const extension = path.extname(coverUrl).split('?')[0] || '.jpg';
         const coverFilePath = path.join(coverFolderPath, `cover${extension}`);
         await downloadImage(coverUrl, coverFilePath);
-        scrapedData.coverImage = coverFilePath;
+        scrapedData.coverImage = `books_data/${sanitizedTitle}/cover`;
       } else {
         console.warn(`⚠️ No cover image found for ${url}`);
       }
@@ -106,6 +106,7 @@ async function scrapeNovelUpdates(url: string): Promise<Partial<Book>> {
   
     return scrapedData;
   }
+
 
 /**
  * Updates the books_config.json with scraped data.
