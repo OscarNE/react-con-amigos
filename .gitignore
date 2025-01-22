@@ -130,6 +130,5 @@ dist
 .pnp.*
 
 # yarr folder
-/yarr-novels/yarr-novels-backend/src/downloads
-/yarr-novels/yarr-novels-backend/src/books
+/yarr-novels/yarr-novels-backend/src/Library
 /yarr-novels/yarr-novels-backend/debug.txt

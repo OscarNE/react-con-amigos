@@ -3,12 +3,40 @@ import path from 'path';
 import archiver, { Archiver } from 'archiver';
 import { WriteStream } from 'fs';
 import cliProgress from 'cli-progress';
-
+import https from 'https';
+import logger from './Logger';
+ 
 /**
- * Sanitizes the book title to create valid folder paths.
+ * Removed special characters and replaces spaces with underscores
+ * @param title Title of a book
+ * @returns 
  */
-function sanitizeTitle(title: string): string {
-  return title.replace(/[^\w\s-]/g, '').replace(/\s+/g, '_').trim();
+export function sanitizeTitle(title: string): string {
+    return title.replace(/[^\w\s-]/g, '').replace(/\s+/g, '_').trim();
+  }
+
+ /**
+ * Downloads an image from a given URL and saves it to the specified path.
+ */
+export async function downloadImage(url: string, filePath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        https.get(url, response => {
+        if (response.statusCode === 200) {
+            const fileStream = fs.createWriteStream(filePath);
+            response.pipe(fileStream);
+            fileStream.on('finish', () => {
+            fileStream.close();
+            resolve();
+            });
+        } else {
+            logger.warn(`⚠️ Failed to download image from ${url}. Status code: ${response.statusCode}`);
+            resolve();
+        }
+        }).on('error', (err) => {
+            logger.warn(`⚠️ Error downloading image from ${url}: ${err.message}`);
+        resolve();
+        });
+    });
 }
 
 /**
@@ -21,7 +49,7 @@ export async function zipBookFolder(bookFolderPath: string, bookName: string): P
   const chapterCount: number = htmlFiles.length;
 
   if (chapterCount === 0) {
-    console.log(`📭 No HTML files found in ${bookName}, skipping zipping.`);
+    logger.warn(`📭 No HTML files found in ${bookName}, skipping zipping.`);
     return;
   }
 
@@ -48,13 +76,13 @@ export async function zipBookFolder(bookFolderPath: string, bookName: string): P
   return new Promise<void>((resolve, reject) => {
     output.on('close', (): void => {
       progressBar.stop();
-      console.log(`\n✅ Zipped book: ${zipFileName} (${archive.pointer()} bytes)`);
+      logger.info(`\n✅ Zipped book: ${zipFileName} (${archive.pointer()} bytes)`);
       resolve();
     });
 
     archive.on('error', (err: Error): void => {
       progressBar.stop();
-      console.error(`❌ Error while zipping ${bookName}:`, err);
+      logger.error(`❌ Error while zipping ${bookName}:`, err);
       reject(err);
     });
 
