@@ -252,13 +252,13 @@ export async function getDropdownItemsNU(url: string): Promise<Array<{ text: str
         await novelUpdatesPrompt(page);
 
         // Wait for the dropdown to be available
-        await page.waitForSelector('#grouplst_chosen', { timeout: 10000 });
+        await page.waitForSelector('#grouplst_chosen', { timeout: 20000 });
 
         // Click the dropdown to trigger the options to load
         await page.click('#grouplst_chosen .chosen-single');
 
         // Wait for the dropdown list to load
-        await page.waitForSelector('.chosen-results', { timeout: 10000 });
+        await page.waitForSelector('.chosen-results', { timeout: 20000 });
 
         // Extract dropdown items with their text and index
         items.push(...await page.$$eval('.chosen-results .active-result', elements =>

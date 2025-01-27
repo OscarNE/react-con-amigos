@@ -9,9 +9,11 @@ import { NovelUpdateBooks } from '../types/BooksLinks';
 import logger from '../utils/Logger';
 import puppeteer from 'puppeteer';
 import { extractDomain, searchBookTranslationUrl } from '../websites/Google';
+import { FenrirTranslationsScraper } from '../websites/fenrirtranslations';
+import fs from 'fs';
 
 
-const DATA_PATH = path.join(__dirname, '..', 'Library', 'books.json');
+const booksConfigPath = path.join(__dirname, '..', 'Library', 'books.json');
 
 export class BookManager {
   private books: BookMap = {};
@@ -21,7 +23,7 @@ export class BookManager {
     logger.debug(`Starting loadBooksConfig`)
     try {
       // Try reading the file
-      const data = await readFile(DATA_PATH, 'utf-8');
+      const data = await readFile(booksConfigPath, 'utf-8');
   
       // Handle empty file
       if (!data.trim()) {
@@ -44,8 +46,8 @@ export class BookManager {
       }
     } catch (error: any) {
       if (error.code === 'ENOENT') {
-        logger.warn(`⚠️ The file ${DATA_PATH} does not exist. Creating a new empty file.`);
-        await writeFile(DATA_PATH, '[]', 'utf-8');  // Create an empty JSON array
+        logger.warn(`⚠️ The file ${booksConfigPath} does not exist. Creating a new empty file.`);
+        await writeFile(booksConfigPath, '[]', 'utf-8');  // Create an empty JSON array
         this.books = {};
       } else {
         logger.error("❌ Error reading the books data file:", error);
@@ -81,7 +83,7 @@ export class BookManager {
   // Save back to JSON as an array
   async saveBooksToConfigFile(): Promise<void> {
     const booksArray = Object.values(this.books);
-    await writeFile(DATA_PATH, JSON.stringify(booksArray, null, 2), 'utf-8');
+    await writeFile(booksConfigPath, JSON.stringify(booksArray, null, 2), 'utf-8');
   }
 
   /**
@@ -93,7 +95,7 @@ export class BookManager {
     logger.debug(`Starting addBook: ${url}`)
 
       // Check if the URL is an exception
-    if (exception(url)) {
+    if (urlException(url)) {
       logger.debug(`URL is in the exception list. Skipping: ${url}`);
       return;
     } else {
@@ -109,19 +111,8 @@ export class BookManager {
 
     const sanitizedTitle = sanitizeTitle(scrapedData.title);
 
-    const bookPath = path.join('..', 'Library', sanitizedTitle);
+    const bookPath = path.join('.', 'src', 'Library', sanitizedTitle);
     const coverPath = path.join(bookPath, 'cover');
-
-    // Create necessary directories
-    if (!existsSync(bookPath)) {
-      mkdirSync(bookPath, { recursive: true });
-      logger.info(`📂 Created directory: ${bookPath}`);
-    }
-
-    if (!existsSync(coverPath)) {
-      mkdirSync(coverPath, { recursive: true });
-      logger.info(`🖼️ Created cover directory: ${coverPath}`);
-    }
 
     // Create and add the new book entry
     const newBook: Book = {
@@ -151,8 +142,6 @@ export class BookManager {
    * @returns An array NovelUpdateBooks with the new titles
    */
   async updateBooksList() {
-    const booksURLs: NovelUpdateBooks = [];
-  
     // Process each config URL (group site in NovelUpdates) sequentially
     for (const urlPair of config) {
       try {
@@ -161,7 +150,7 @@ export class BookManager {
         // If book has not been added still, get the NovelUpdates URL
         for (const book of bookTitles) {
           if ( !this.bookExists(book.text) ){
-            console.debug(`📕 New book: ${book.text}`);
+            console.info(`📕 New book: ${book.text}`);
             const bookUrl = await scrapeBookURL(urlPair.NovelUpdatesURL, book.text);
             if (bookUrl) {
               console.debug(`Scrapping and adding ${book.text}.`)
@@ -170,7 +159,7 @@ export class BookManager {
               console.warn(`Failed to scrape URL for book: ${book.text}`);
           }
           } else {
-            logger.debug(`📗 Already exists: ${book.text}`);
+            logger.info(`📗 Already exists: ${book.text}`);
             logger.debug(`Translation URL: ${this.books[sanitizeTitle(book.text)].translationUrl}`)
           }
           if (!this.books[sanitizeTitle(book.text)].translationUrl) {
@@ -205,10 +194,56 @@ export class BookManager {
         console.error(`Failed to scrape URLs from ${urlPair.NovelUpdatesURL}:`, error);
       }
     }
+    logger.debug(`Finished updateBooksList`)
   }
+
+  async downloadChapters() {
+    logger.debug(`Start downloading chapters...`);
+    for (const [key, book] of Object.entries(this.books)) {
+      logger.debug(`Processing the book ${book.title} from ${book.translationUrl}`);
+      if (book.translationUrl === "fill_manually") {
+        logger.warn(`Skipping ${book.title} because URL: ${book.translationUrl}`);
+        continue;
+      }
+  
+      const baseDomain = new URL(book.translationUrl).hostname;
+      logger.debug(`Extracted domain: ${baseDomain}`);
+  
+      switch (baseDomain) {
+        case 'fenrirtranslations.com':
+          const scrapper = new FenrirTranslationsScraper(book);
+          logger.debug(`Scraping chapter list`);
+          const URLs = await scrapper.scrapeChapterList();
+  
+          for (const url of URLs) {
+            const sanitizedFileName = url.text.replace(/[^a-zA-Z0-9]/g, '_');
+            const chapterFilePath = path.join(scrapper['chaptersPath'], `${sanitizedFileName}.html`);
+  
+            if (fs.existsSync(chapterFilePath)) {
+              logger.debug(`Skipping chapter ${url.episode} - ${url.text} as it already exists at ${chapterFilePath}`);
+              continue;
+            }
+  
+            logger.debug(`Scraping chapter ${url.episode} - ${url.text} from ${url.href}`);
+            const content = await scrapper.scrapeChapter(url.href);
+            await scrapper.storeChapter(content, url);
+          }
+          await scrapper.scrapeCoverImage();
+          break;
+  
+        case 'skydemonorder.com':
+          logger.debug(`skydemonorder WIP`);
+          break;
+  
+        default:
+          logger.warn(`Unknown domain ${baseDomain}. Skipping...`);
+      }
+    }
+  }
+  
 }
 
-function exception(url: string): boolean {
+function urlException(url: string): boolean {
   // List of URLs to check against
   const exceptions = [
     'https://www.novelupdates.com/group/fenrir-realm/',
@@ -217,4 +252,20 @@ function exception(url: string): boolean {
 
   // Check if the URL matches any in the list
   return exceptions.includes(url);
+}
+
+function createBookDirectory(sanitizedTitle: string){
+  const bookPath = path.join('.', 'Library', sanitizedTitle);
+  const coverPath = path.join(bookPath, 'cover');
+
+  // Create necessary directories
+  if (!existsSync(bookPath)) {
+    mkdirSync(bookPath, { recursive: true });
+    logger.info(`📂 Created directory: ${bookPath}`);
+  }
+
+  if (!existsSync(coverPath)) {
+    mkdirSync(coverPath, { recursive: true });
+    logger.info(`🖼️ Created cover directory: ${coverPath}`);
+  }
 }

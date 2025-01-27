@@ -5,6 +5,9 @@ import { ChapterLink } from '../types/ChapterLink';
 import { Book } from '../types/Book';
 import * as path from 'path';
 import * as fs from 'fs';
+import puppeteer from 'puppeteer';
+import logger from '../utils/Logger';
+import { cleanChapterHtml } from '../utils/htmlManipulation';
 
 export class FenrirTranslationsScraper extends BaseScraper {
   private chaptersPath: string = "";
@@ -22,51 +25,164 @@ export class FenrirTranslationsScraper extends BaseScraper {
 
   // Prepare folders and paths for chapters and cover
   private generatePaths(): void {
-    this.chaptersPath = path.join('..', 'Library', this.book.sanitizedTitle);
+    this.chaptersPath = path.join('src', 'Library', this.book.sanitizedTitle);
     this.coverPath = path.join(this.chaptersPath, 'cover');
+
+    logger.debug(`📂 Using chapters directory: ${this.chaptersPath}`);
 
     if (!fs.existsSync(this.chaptersPath)) {
       fs.mkdirSync(this.chaptersPath, { recursive: true });
-      console.log(`📂 Created chapters directory: ${this.chaptersPath}`);
+      logger.info(`📂 Created chapters directory: ${this.chaptersPath}`);
     }
 
     if (!fs.existsSync(this.coverPath)) {
       fs.mkdirSync(this.coverPath, { recursive: true });
-      console.log(`🖼️ Created cover directory: ${this.coverPath}`);
+      logger.info(`🖼️ Created cover directory: ${this.coverPath}`);
     }
   }
 
   async scrapeChapterList(): Promise<ChapterLink[]> {
-    const response = await axios.get(this.book.translationUrl);
-    const $ = cheerio.load(response.data);
+    const browser = await puppeteer.connect({
+      // Run on Poweshell: 
+      // & "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\chrome-profile"
+      browserURL: 'http://localhost:9222',
+      defaultViewport: null,
+    });
+    const page = await browser.newPage();
     const links: ChapterLink[] = [];
 
-    $('div.chap-wrapper.active li.wp-manga-chapter.free-chap').each((_, el) => {
-      const href = $(el).find('a').attr('href');
-      const text = $(el).find('a').text().trim();
-      const episode = text.match(/\d+/)?.[0];
-      if (href && episode) links.push({ href, text, episode });
-    });
-
-    console.log(`🔗 Extracted ${links.length} chapter links.`);
+    try {
+      // Go to the page without waiting for `networkidle2`
+      await page.goto(this.book.translationUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      logger.debug('Page navigation started successfully.');
+    
+      // Wait for the specific element to load
+      await page.waitForSelector('div.chap-wrapper.active li.wp-manga-chapter.free-chap', { timeout: 30000 });
+      logger.debug('Chapter list element loaded successfully.');
+    
+      // Extract the page content
+      const response = await page.content();
+      const $ = cheerio.load(response);
+    
+      // Extract chapter links
+      $('div.chap-wrapper.active li.wp-manga-chapter.free-chap').each((_, el) => {
+        const href = $(el).find('a').attr('href');
+        const text = $(el).find('a').text().trim();
+        const episode = text.match(/\d+/)?.[0];
+        if (href && episode) links.push({ href, text, episode });
+      });
+    
+      logger.debug(`Extracted ${links.length} chapters.`);
+    } catch (error) {
+      logger.error(`Error scraping chapter list`, error);
+    } finally {
+      await page.close();
+      browser.disconnect();
+    }
+    logger.info(`🔗 Extracted ${links.length} chapter links.`);
     return links.reverse();
   }
 
-  async scrapeCoverImage(): Promise<string> {
+async scrapeCoverImage(): Promise<string> {
+  try {
     const response = await axios.get(this.book.translationUrl);
     const $ = cheerio.load(response.data);
 
-    const coverUrl = $('div.post-title img').attr('src') || '';
-    console.log(`📖 Cover image found: ${coverUrl}`);
-    return coverUrl;
-  }
+    // Get the cover URL
+    const coverUrl = $('div.summary_image img').attr('src') || '';
+    if (!coverUrl) {
+      logger.warn('⚠️ No cover image found.');
+      return '';
+    }
 
-  async scrapeChapter(chapterUrl: string): Promise<string> {
-    const response = await axios.get(chapterUrl);
-    const $ = cheerio.load(response.data);
+    logger.debug(`📖 Cover image found: ${coverUrl}`);
 
-    const content = $('div.chapter-content').html() || '';
-    console.log(`📄 Extracted content from chapter: ${chapterUrl}`);
-    return content;
+    // Create the cover directory if it doesn't exist
+    const coverDirectory = path.join(this.book.bookPath, 'cover');
+    if (!fs.existsSync(coverDirectory)) {
+      fs.mkdirSync(coverDirectory, { recursive: true });
+      logger.info(`📂 Created cover directory: ${coverDirectory}`);
+    }
+
+    // Determine file extension and set file path
+    const fileExtension = path.extname(coverUrl) || '.png'; // Default to .png if no extension
+    const coverFilePath = path.join(coverDirectory, `cover${fileExtension}`);
+
+    // Download the image and save it to the file
+    const imageResponse = await axios.get(coverUrl, { responseType: 'arraybuffer' });
+    fs.writeFileSync(coverFilePath, imageResponse.data);
+    logger.info(`✅ Cover image saved at: ${coverFilePath}`);
+
+    return coverFilePath; // Return the path to the saved cover image
+  } catch (error) {
+    logger.error('❌ Error scraping cover image:', error);
+    return '';
   }
 }
+
+
+  async scrapeChapter(chapterUrl: string): Promise<string> {
+    const browser = await puppeteer.connect({
+      browserURL: 'http://localhost:9222',
+      defaultViewport: null,
+    });
+    const page = await browser.newPage();
+    let chapter = ""; // Initialize chapter content
+  
+    try {
+      // Visit the main page without waiting for `networkidle2`
+      await page.goto(chapterUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      logger.debug('Page navigation started successfully.');
+  
+      // Wait for the specific element to load
+      await page.waitForSelector('div.reading-content', { timeout: 20000 });
+      logger.debug('Reading content element loaded successfully.');
+  
+      // Extract the page content
+      const response = await page.content();
+      const $ = cheerio.load(response);
+  
+      const rawHtml = $('div.reading-content').html() || '';
+      // logger.debug('Raw HTML (truncated):', rawHtml.substring(0, 1500)); // Print the first 500 characters
+  
+      if (!rawHtml) {
+        logger.error('div.reading-content is empty or not found');
+      }
+  
+      chapter = cleanChapterHtml(rawHtml);
+      // logger.debug('Cleaned HTML:', chapter); // Log cleaned HTML for debugging
+  
+      logger.info(`📄 Extracted content from chapter: ${chapterUrl}`);
+    } catch (error) {
+      logger.error(`Error scraping chapter`, error);
+    } finally {
+      await page.close();
+      browser.disconnect();
+    }
+  
+    return chapter;
+  }
+   
+
+  async storeChapter(content: string, chapter: ChapterLink): Promise<void> {
+    try {
+      const sanitizedFileName = chapter.text.replace(/[^a-zA-Z0-9]/g, '_'); // Sanitize filename
+      const filePath = path.join(this.chaptersPath, `${sanitizedFileName}.html`);
+  
+      // Ensure the folder path exists
+      const folderPath = path.dirname(filePath); // Get the folder path from the file path
+      if (!fs.existsSync(folderPath)) {
+        fs.mkdirSync(folderPath, { recursive: true });
+        logger.info(`📂 Created missing folder: ${folderPath}`);
+      }
+  
+      // Write the chapter content to the file
+      fs.writeFileSync(filePath, content, 'utf-8');
+      logger.info(`✅ Chapter stored: ${filePath}`);
+    } catch (error) {
+      logger.error(`❌ Failed to store chapter ${chapter.text}:`, error);
+    }
+  }
+  
+}
+

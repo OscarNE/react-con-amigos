@@ -13,7 +13,10 @@ async function main(): Promise<void> {
   bookManager.initialize();
 
   //Update in memory books
-  bookManager.updateBooksList();
+  await bookManager.updateBooksList();
+
+  //download books
+  await bookManager.downloadChapters();
 }
 
 // Start scraping process
