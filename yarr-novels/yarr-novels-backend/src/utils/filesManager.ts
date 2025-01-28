@@ -40,65 +40,95 @@ export async function downloadImage(url: string, filePath: string): Promise<void
 }
 
 /**
- * Zips all HTML files in the book folder to a new path with a progress bar.
+ * Zips all HTML files in the book folder to a new path with a progress bar. It checks if the zip is up to date or a new one
+ * needs to be created
  * @param bookFolderPath - Path to the book's folder.
- * @param bookName - Name of the book.
+ * @param sanitizedTitle - Sanitized name of the book.
  */
-export async function zipBookFolder(bookFolderPath: string, bookName: string): Promise<void> {
+export async function zipBookFolder(bookFolderPath: string, sanitizedTitle: string): Promise<void> {
+  // Check if the folder exists
+  if (!fs.existsSync(bookFolderPath)) {
+    logger.warn(`📂 Folder does not exist: ${bookFolderPath}, skipping zipping.`);
+    return;
+  }
+
   const htmlFiles: string[] = fs.readdirSync(bookFolderPath).filter((file: string) => file.endsWith('.html'));
   const chapterCount: number = htmlFiles.length;
 
   if (chapterCount === 0) {
-    logger.warn(`📭 No HTML files found in ${bookName}, skipping zipping.`);
+    logger.warn(`📭 No HTML files found in ${sanitizedTitle}, skipping zipping.`);
     return;
   }
 
-  const sanitizedTitle = sanitizeTitle(bookName || '');
-  const updatesFolderPath: string = path.join(__dirname, '..', '..', 'books', sanitizedTitle);
-  if (!fs.existsSync(updatesFolderPath)) {
-    fs.mkdirSync(updatesFolderPath, { recursive: true });
+  // Check if a zip file with the correct number of files already exists
+  const expectedZipFileName = `${sanitizedTitle}_${chapterCount}.zip`;
+  const existingZipFiles: string[] = fs.readdirSync(bookFolderPath).filter((file: string) => file.endsWith('.zip'));
+
+  const upToDateZip = existingZipFiles.find((zipFile) => zipFile === expectedZipFileName);
+
+  if (upToDateZip) {
+    logger.info(`📦 Up-to-date zip file already exists: ${upToDateZip}`);
+    return;
   }
 
-  const zipFileName: string = `${bookName}_${chapterCount}.zip`;
-  const zipFilePath: string = path.join(updatesFolderPath, zipFileName);
-
+  const zipFilePath: string = path.join(bookFolderPath, expectedZipFileName);
   const output: WriteStream = fs.createWriteStream(zipFilePath);
   const archive: Archiver = archiver('zip', { zlib: { level: 9 } });
 
-  // Create a progress bar
+  // Initialize progress bar
   const progressBar = new cliProgress.SingleBar({
-    format: `📦 Zipping | {bar} | {percentage}% | {value}/{total} bytes`,
+    format: `📦 Zipping ${sanitizedTitle} | {bar} | {percentage}% | File {value}/{total}`,
     barCompleteChar: '\u2588',
     barIncompleteChar: '\u2591',
-    hideCursor: true
+    hideCursor: true,
   });
 
-  return new Promise<void>((resolve, reject) => {
-    output.on('close', (): void => {
+  try {
+    // Start zipping process with a promise to ensure proper waiting
+    await new Promise<void>((resolve, reject) => {
+      output.on('close', (): void => {
+        progressBar.stop();
+        logger.info(`✅ Successfully zipped book: ${expectedZipFileName} (${archive.pointer()} bytes)`);
+        resolve();
+      });
+
+      archive.on('error', (err: Error): void => {
+        progressBar.stop();
+        logger.error(`❌ Error while zipping ${sanitizedTitle}:`, err);
+        reject(err);
+      });
+
+      archive.pipe(output);
+
+      // Start the progress bar
+      progressBar.start(chapterCount, 0);
+
+      // Add files one by one in order
+      (async function addFilesSequentially(index: number): Promise<void> {
+        if (index >= htmlFiles.length) {
+          archive.finalize();
+          return;
+        }
+
+        const file = htmlFiles[index];
+        const filePath = path.join(bookFolderPath, file);
+
+        // Add the file to the archive
+        archive.file(filePath, { name: file });
+
+        // Update progress bar after adding the file
+        progressBar.update(index + 1);
+
+        // Process the next file
+        await addFilesSequentially(index + 1);
+      })(0);
+    });
+  } catch (error) {
+    logger.error(`❌ Zipping process failed for: ${sanitizedTitle}`, error);
+  } finally {
+    if (progressBar.isActive) {
       progressBar.stop();
-      logger.info(`\n✅ Zipped book: ${zipFileName} (${archive.pointer()} bytes)`);
-      resolve();
-    });
-
-    archive.on('error', (err: Error): void => {
-      progressBar.stop();
-      logger.error(`❌ Error while zipping ${bookName}:`, err);
-      reject(err);
-    });
-
-    archive.on('progress', (progress) => {
-      progressBar.setTotal(progress.fs.totalBytes);
-      progressBar.update(progress.fs.processedBytes);
-    });
-
-    archive.pipe(output);
-
-    htmlFiles.forEach((file: string): void => {
-      const filePath: string = path.join(bookFolderPath, file);
-      archive.file(filePath, { name: file });
-    });
-
-    progressBar.start(1, 0); // Initialize progress bar
-    archive.finalize();
-  });
+    }
+  }
 }
+

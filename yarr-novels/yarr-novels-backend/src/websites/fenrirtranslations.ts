@@ -83,42 +83,58 @@ export class FenrirTranslationsScraper extends BaseScraper {
     return links.reverse();
   }
 
-async scrapeCoverImage(): Promise<string> {
-  try {
-    const response = await axios.get(this.book.translationUrl);
-    const $ = cheerio.load(response.data);
-
-    // Get the cover URL
-    const coverUrl = $('div.summary_image img').attr('src') || '';
-    if (!coverUrl) {
-      logger.warn('⚠️ No cover image found.');
+  async scrapeCoverImage(): Promise<string> {
+    try {
+      // Define the cover directory
+      const coverDirectory = path.join(__dirname, this.book.coverImagePath);
+  
+      // Check if the cover directory exists and contains any files
+      if (fs.existsSync(coverDirectory)) {
+        const files = fs.readdirSync(coverDirectory);
+  
+        // Check if there is at least one file with a .jpg or .png extension
+        const hasCoverImage = files.some((file) => file.endsWith('.jpg') || file.endsWith('.png'));
+  
+        if (hasCoverImage) {
+          logger.info(`✅ Cover image already exists in directory: ${coverDirectory}`);
+          return coverDirectory; // Return the directory path
+        }
+      }
+  
+      // If no cover image exists, proceed with scraping
+      const response = await axios.get(this.book.translationUrl);
+      const $ = cheerio.load(response.data);
+  
+      // Get the cover URL
+      const coverUrl = $('div.summary_image img').attr('src') || '';
+      if (!coverUrl) {
+        logger.warn('⚠️ No cover image found.');
+        return '';
+      }
+  
+      logger.debug(`📖 Cover image found: ${coverUrl}`);
+  
+      // Create the cover directory if it doesn't exist
+      if (!fs.existsSync(coverDirectory)) {
+        fs.mkdirSync(coverDirectory, { recursive: true });
+        logger.info(`📂 Created cover directory: ${coverDirectory}`);
+      }
+  
+      // Determine file extension from the cover URL or default to .png
+      const fileExtension = path.extname(coverUrl) || '.png';
+      const coverFilePath = path.join(coverDirectory, `cover${fileExtension}`);
+  
+      // Download the image and save it to the file
+      const imageResponse = await axios.get(coverUrl, { responseType: 'arraybuffer' });
+      fs.writeFileSync(coverFilePath, imageResponse.data);
+      logger.info(`✅ Cover image saved at: ${coverFilePath}`);
+  
+      return coverFilePath; // Return the path to the saved cover image
+    } catch (error) {
+      logger.error('❌ Error scraping cover image:', error);
       return '';
     }
-
-    logger.debug(`📖 Cover image found: ${coverUrl}`);
-
-    // Create the cover directory if it doesn't exist
-    const coverDirectory = path.join(this.book.bookPath, 'cover');
-    if (!fs.existsSync(coverDirectory)) {
-      fs.mkdirSync(coverDirectory, { recursive: true });
-      logger.info(`📂 Created cover directory: ${coverDirectory}`);
-    }
-
-    // Determine file extension and set file path
-    const fileExtension = path.extname(coverUrl) || '.png'; // Default to .png if no extension
-    const coverFilePath = path.join(coverDirectory, `cover${fileExtension}`);
-
-    // Download the image and save it to the file
-    const imageResponse = await axios.get(coverUrl, { responseType: 'arraybuffer' });
-    fs.writeFileSync(coverFilePath, imageResponse.data);
-    logger.info(`✅ Cover image saved at: ${coverFilePath}`);
-
-    return coverFilePath; // Return the path to the saved cover image
-  } catch (error) {
-    logger.error('❌ Error scraping cover image:', error);
-    return '';
   }
-}
 
 
   async scrapeChapter(chapterUrl: string): Promise<string> {

@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'fs/promises';
 import { existsSync, mkdirSync } from 'fs';
 import path from 'path';
 import { Book, BookMap } from '../types/Book'
-import { sanitizeTitle } from '../utils/filesManager';
+import { sanitizeTitle, zipBookFolder } from '../utils/filesManager';
 import { getDropdownItemsNU, scrapeBookMetadata, scrapeBookURL } from '../websites/novelUpdates';
 import { config } from "../config/config";
 import { NovelUpdateBooks } from '../types/BooksLinks';
@@ -220,7 +220,7 @@ export class BookManager {
             const chapterFilePath = path.join(scrapper['chaptersPath'], `${sanitizedFileName}.html`);
   
             if (fs.existsSync(chapterFilePath)) {
-              logger.debug(`Skipping chapter ${url.episode} - ${url.text} as it already exists at ${chapterFilePath}`);
+              // logger.debug(`Skipping chapter ${url.episode} - ${url.text} as it already exists at ${chapterFilePath}`);
               continue;
             }
   
@@ -240,6 +240,12 @@ export class BookManager {
       }
     }
   }
+
+  async zipBooks() {
+    for (const book of Object.values(this.books)) {
+      await zipBookFolder(book.bookPath, book.sanitizedTitle)
+    }
+}
   
 }
 
