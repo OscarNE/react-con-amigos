@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'fs/promises';
 import { existsSync, mkdirSync } from 'fs';
 import path from 'path';
 import { Book, BookMap } from '../types/Book'
-import { sanitizeTitle, zipBookFolder } from '../utils/filesManager';
+import { sanitizeTitle, zipLibraryFolder } from '../utils/filesManager';
 import { getDropdownItemsNU, scrapeBookMetadata, scrapeBookURL } from '../websites/novelUpdates';
 import { config } from "../config/config";
 import { NovelUpdateBooks } from '../types/BooksLinks';
@@ -14,6 +14,7 @@ import fs from 'fs';
 
 
 const booksConfigPath = path.join(__dirname, '..', 'Library', 'books.json');
+const libraryPath = path.join(__dirname, '..', 'Library');
 
 export class BookManager {
   private books: BookMap = {};
@@ -240,13 +241,10 @@ export class BookManager {
       }
     }
   }
-
-  async zipBooks() {
-    for (const book of Object.values(this.books)) {
-      await zipBookFolder(book.bookPath, book.sanitizedTitle)
-    }
-}
   
+  async zipLibrary() {
+    zipLibraryFolder(libraryPath);
+  }
 }
 
 function urlException(url: string): boolean {

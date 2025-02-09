@@ -16,10 +16,10 @@ async function main(): Promise<void> {
   await bookManager.updateBooksList();
 
   //download books
-  //await bookManager.downloadChapters();
+  await bookManager.downloadChapters();
 
   //zip chapters
-  await bookManager.zipBooks();
+  await bookManager.zipLibrary();
 }
 
 // Start scraping process
