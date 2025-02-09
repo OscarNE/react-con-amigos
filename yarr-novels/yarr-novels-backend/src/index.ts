@@ -10,13 +10,16 @@ async function main(): Promise<void> {
   
   // Load config file in to memory
   const bookManager = new BookManager();
-  bookManager.initialize();
+  await bookManager.initialize();
 
   //Update in memory books
   await bookManager.updateBooksList();
 
   //download books
   await bookManager.downloadChapters();
+
+  //update books (mainly chapters number)
+  bookManager.updateAllBooks();
 
   //zip chapters
   await bookManager.zipLibrary();

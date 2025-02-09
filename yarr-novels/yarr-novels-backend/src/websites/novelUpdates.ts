@@ -206,16 +206,26 @@ export async function novelUpdatesPrompt(page: Page): Promise<void> {
 
         // Click the matched item
         try {
-            await page.waitForSelector(
-                `.chosen-results .active-result[data-option-array-index="${match.index}"]`,
-                { visible: true, timeout: 10000 }
-            );
-            await page.click(`.chosen-results .active-result[data-option-array-index="${match.index}"]`);
-            logger.debug(`Clicked successfully: ${match.text}`);
+          await page.waitForSelector(
+              `.chosen-results .active-result[data-option-array-index="${match.index}"]`,
+              { visible: true, timeout: 10000 }
+          );
+          await page.click(`.chosen-results .active-result[data-option-array-index="${match.index}"]`);
+          logger.debug(`Clicked successfully: ${match.text}`);
         } catch (error) {
-            logger.error(`Error clicking dropdown item: ${match.text}. Error: ${error}`);
-            return null;
+            logger.warn(`First attempt failed for ${match.text}. Retrying...`);
+        
+            try {
+                await new Promise(resolve => setTimeout(resolve, 500)); // ✅ Cross-version delay
+                await page.click(`.chosen-results .active-result[data-option-array-index="${match.index}"]`);
+                logger.debug(`Clicked successfully on retry: ${match.text}`);
+            } catch (retryError) {
+                logger.error(`Second attempt failed for ${match.text}. Error: ${retryError}`);
+                return null;
+            }
         }
+      
+      
 
         // Capture the URL
         const currentUrl = page.url();

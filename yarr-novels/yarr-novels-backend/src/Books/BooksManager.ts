@@ -13,7 +13,7 @@ import { FenrirTranslationsScraper } from '../websites/fenrirtranslations';
 import fs from 'fs';
 
 
-const booksConfigPath = path.join(__dirname, '..', 'Library', 'books.json');
+const booksConfigPath = path.join(__dirname, '..', 'Library', 'books_config.json');
 const libraryPath = path.join(__dirname, '..', 'Library');
 
 export class BookManager {
@@ -77,14 +77,35 @@ export class BookManager {
   // Update a book by title
   updateBook(sanitizedTitle: string, updatedData: Partial<Book>): void {
     if (this.books[sanitizedTitle]) {
-      this.books[sanitizedTitle] = { ...this.books[sanitizedTitle], ...updatedData };
+        // Merge updated data
+        const updatedBook = { ...this.books[sanitizedTitle], ...updatedData };
+
+        // ✅ Automatically count and update nFiles
+        updatedBook.nfiles = this.countChapters(updatedBook.bookPath);
+
+        // Store the updated book back
+        this.books[sanitizedTitle] = updatedBook;
+
+        logger.debug(`Updated book: ${updatedBook.title}, nFiles: ${updatedBook.nfiles}`);
     }
   }
+
+  updateAllBooks(): void {
+    logger.debug("Updating all books...");
+
+    for (const [key, book] of Object.entries(this.books)) {
+        this.updateBook(book.sanitizedTitle, {});
+    }
+
+    this.saveBooksToConfigFile();
+    logger.debug("All books updated.");
+}
 
   // Save back to JSON as an array
   async saveBooksToConfigFile(): Promise<void> {
     const booksArray = Object.values(this.books);
     await writeFile(booksConfigPath, JSON.stringify(booksArray, null, 2), 'utf-8');
+    logger.info(`${booksConfigPath} updated.`)
   }
 
   /**
@@ -245,6 +266,30 @@ export class BookManager {
   async zipLibrary() {
     zipLibraryFolder(libraryPath);
   }
+
+  /**
+ * Counts the number of downloaded chapters (HTML files) in a book's directory.
+ * @param bookPath - The path to the book's folder.
+ * @returns Number of chapter files.
+ */
+  private countChapters(bookPath: string): number {
+    try {
+        const chaptersDir = path.join(bookPath);
+        
+        if (!fs.existsSync(chaptersDir)) {
+            logger.warn(`Could not count chapters: ${bookPath}`)
+            return 0;  // ✅ If the folder is missing, return 0
+        }
+
+        const files = fs.readdirSync(chaptersDir);
+        const count = files.filter(file => file.endsWith(".html")).length;  // ✅ Only count .html files
+        return count
+    } catch (error) {
+        logger.error(`Error counting chapters in ${bookPath}: ${error}`);
+        return 0;  // ✅ If an error occurs, return 0 to prevent crashes
+    }
+  }
+
 }
 
 function urlException(url: string): boolean {
